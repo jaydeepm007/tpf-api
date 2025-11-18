@@ -44,14 +44,32 @@ export class CreateTpfSchemes20251124000000 implements MigrationInterface {
           {
             name: 'nav',
             type: 'numeric',
-            isNullable: false,
+            isNullable: true,
             precision: 15,
             scale: 4
           },
           {
             name: 'nav_date',
             type: 'timestamp with time zone',
-            isNullable: false
+            isNullable: true
+          },
+          {
+            name: 'status',
+            type: 'integer',
+            isNullable: false,
+            default: '1',
+          },
+          {
+            name: 'modified_nav',
+            type: 'numeric',
+            isNullable: true,
+            precision: 15,
+            scale: 4
+          },
+          {
+            name: 'modified_nav_date',
+            type: 'timestamp with time zone',
+            isNullable: true,
           },
           {
             name: 'create_date',

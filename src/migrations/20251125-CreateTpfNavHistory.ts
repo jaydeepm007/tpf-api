@@ -59,6 +59,12 @@ export class CreateTpfNavHistory20251125000000 implements MigrationInterface {
             isNullable: false
           },
           {
+            name: 'status',
+            type: 'integer',
+            isNullable: false,
+            default: '1',
+          },
+          {
             name: 'create_date',
             type: 'timestamp with time zone',
             default: 'now()',

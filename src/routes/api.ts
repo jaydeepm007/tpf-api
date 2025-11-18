@@ -159,9 +159,6 @@ router.post('/nav-history', async (req: Request, res: Response) => {
 });
 
 router.post('/documents', async (req: Request, res: Response) => {
-  // fetch payload
-  const data = req?.body;
-  console.log('Received /documents request with body:', data);
   const payload = getAuthHeaderForReq(req?.body);
 
   console.log('Payload in /documents:', payload);
@@ -169,7 +166,8 @@ router.post('/documents', async (req: Request, res: Response) => {
   try {
     let rows: any;
     if (documentCategoryId > 0) {
-        const response = await fetch(`${API_DOMAIN}/tpf_documents?document_category_id=eq.${documentCategoryId}&is_active=eq.true`);
+        // documents by sub category name
+        const response = await fetch(`${API_DOMAIN}/tpf_documents?document_category_id=eq.${documentCategoryId}&is_active=eq.true&select=*,tpf_document_sub_categories(*)`);
         rows = await response.json();
         return sendEncrypted(res, rows);
     } else {

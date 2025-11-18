@@ -13,6 +13,9 @@ export class CreateFnTpfNavHistoryTrigger20251127000000 implements MigrationInte
 					scheme_name,
 					asset_category,
 					contribution_type,
+					status,
+					modified_nav,
+					modified_nav_date,
 					nav,
 					nav_date,
 					create_date
@@ -24,6 +27,9 @@ export class CreateFnTpfNavHistoryTrigger20251127000000 implements MigrationInte
 					NEW.scheme_name,
 					NEW.asset_category,
 					NEW.contribution_type,
+					NEW.status,
+					NEW.modified_nav,
+					NEW.modified_nav_date,
 					NEW.nav,
 					NEW.nav_date,
 					NOW()
@@ -38,6 +44,7 @@ export class CreateFnTpfNavHistoryTrigger20251127000000 implements MigrationInte
 			CREATE TRIGGER trg_tpf_nav_history
 			AFTER INSERT OR UPDATE ON tpf_schemes
 			FOR EACH ROW
+			WHEN (NEW.status = 2)
 			EXECUTE FUNCTION fn_tpf_nav_history_trigger();
 		`);
 	}

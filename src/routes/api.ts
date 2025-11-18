@@ -193,20 +193,63 @@ router.get('/document-categories', async (req: Request, res: Response) => {
 
 //  POST contact-us -> creates a contact us entry
 router.post('/contact-us', async (req: Request, res: Response) => {
-    const payload = getAuthHeaderForReq(req?.body);
+    const payloadRaw = getAuthHeaderForReq(req?.body);
+    console.log('Received /contact-us payload:', payloadRaw);
+
+    // Ensure payload is an object (parse if it's a JSON string)
+    let payload: any = payloadRaw;
+    if (typeof payloadRaw === 'string') {
+        try {
+            payload = JSON.parse(payloadRaw);
+        } catch (err) {
+            console.error('Invalid /contact-us payload (not JSON):', err);
+            return sendEncrypted(res, { error: 'Invalid payload: expected JSON object' });
+        }
+    }
+
+    if (!payload || typeof payload !== 'object') {
+        return sendEncrypted(res, { error: 'Invalid payload: expected object' });
+    }
+
     try {
+        const headers: any = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            // ask PostgREST to return the created representation (so response body is JSON)
+            'Prefer': 'return=representation',
+        };
+        // optionally include a service token for backend->backend auth
+        if (process.env.USE_SERVICE_TOKEN === '1') {
+            headers['Authorization'] = `Bearer ${getServiceToken()}`;
+        }
+        payload.create_date = new Date().toISOString();
+
         const response = await fetch(`${API_DOMAIN}/tpf_contact_us`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify(payload),
         });
-        const result = await response.json();
+
+        // robust parsing: handle empty responses (204/201 with no body) and non-JSON bodies
+        const text = await response.text();
+        let result: any;
+        if (!text) {
+            result = { status: response.status, ok: response.ok };
+        } else {
+            try {
+                result = JSON.parse(text);
+            } catch {
+                result = text;
+            }
+        }
+
+        console.log('Contact us entry created:', result);
         return sendEncrypted(res, result);
     } catch (err) {
+        console.error('Error in /contact-us:', err);
         return sendEncrypted(res, { error: String(err) });
     }
-  }
-);
+});
 
 // GET /routes -> returns a list of registered routes and a count
 router.get('/routes', (req: Request, res: Response) => {

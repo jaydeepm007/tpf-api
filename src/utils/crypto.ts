@@ -2,8 +2,8 @@ import CryptoJS from 'crypto-js';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const key = CryptoJS.enc.Utf8.parse(process.env.ENCRYPT_KEY || '1234567890123456');
-const iv = CryptoJS.enc.Utf8.parse(process.env.ENCRYPT_IV || '1234567890123456');
+const key = CryptoJS.enc.Utf8.parse(process.env.EncryptKey || '1203199320052011');
+const iv = CryptoJS.enc.Utf8.parse(process.env.EncryptIV || '1203199320052011');
 
 export function encryptUsingAES256(text: string): string {
   const encrypted = CryptoJS.AES.encrypt(CryptoJS.enc.Utf8.parse(text), key, {

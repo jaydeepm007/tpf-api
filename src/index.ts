@@ -14,6 +14,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.get('/', (_req, res) => res.send('tpf-backend running'));
 
 app.use('/api', apiRouter);
+console.log('[index] mounted apiRouter at /api');
 
 const PORT = process.env.PORT || 3200;
 

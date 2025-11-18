@@ -24,22 +24,17 @@ export class CreateDocumentCategories20251122000000 implements MigrationInterfac
             default: 'true'
           },
           {
-            name: 'phone',
-            type: 'varchar',
-            length: '50',
-            isNullable: false
-          },
-          {
-            name: 'note',
-            type: 'text',
-            isNullable: false,
-          },
-          {
             name: 'created_at',
             type: 'timestamp with time zone',
             default: 'now()',
             isNullable: false,
-          }
+          },
+          {
+            name: 'updated_at',
+            type: 'timestamp with time zone',
+            default: 'now()',
+            isNullable: false,
+          },
         ],
       }),
       true,
@@ -47,6 +42,6 @@ export class CreateDocumentCategories20251122000000 implements MigrationInterfac
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.dropTable('tpf_contact_us');
+    await queryRunner.dropTable('tpf_document_categories');
   }
 }

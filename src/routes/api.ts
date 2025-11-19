@@ -2,7 +2,18 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { decryptUsingAES256, encryptUsingAES256 } from '../utils/crypto';
 import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
+import { Pool } from 'pg';
+import { first } from 'rxjs';
+import * as bcrypt from "bcryptjs";
+import { MailerService } from '../mailer/mailer.service';
+import { ConfigService } from '@nestjs/config/dist/config.service';
+import path from 'path';
+import fs from 'fs';
 dotenv.config();
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
 const router = Router();
 
@@ -16,11 +27,24 @@ function sendEncrypted(res: Response, payload: any) {
   return res.json(cipher);
 }
 
+// helper: ensure expiresIn is a number (seconds) or a timespan string accepted by jsonwebtoken
+function normalizeExpiresIn(): string | number {
+	// prefer new name, fall back to old name for compatibility
+	const val = process.env.JWT_EXPIRES_IN || process.env.JWT_EXPIRES;
+	if (!val) return '1h'; // default
+	// if value is purely digits, treat as seconds (number)
+	if (/^\d+$/.test(val)) {
+		return parseInt(val, 10);
+	}
+	// otherwise return as string (e.g. "1h", "15m")
+	return val;
+}
+
 // helper: generate a short-lived server JWT for backend->backend calls
 function getServiceToken() {
   const payload = { iss: 'tpf-backend', scope: 'service' };
   return jwt.sign(payload, process.env.JWT_SECRET || 'default_secret', {
-    expiresIn: process.env.JWT_EXPIRES_IN || '1h',
+    expiresIn: normalizeExpiresIn(),
   });
 }
 
@@ -124,10 +148,62 @@ router.use((req: Request, _res: Response, next: NextFunction) => {
 router.get('/token', (_req: Request, res: Response) => {
   const payload = { iss: 'tpf-backend', scope: 'public' };
   const token = jwt.sign(payload, process.env.JWT_SECRET || 'default_secret', {
-    expiresIn: process.env.JWT_EXPIRES_IN || '1h',
+    expiresIn: normalizeExpiresIn(),
   });
   return sendEncrypted(res, token );
 //   return res.json({ token });
+});
+
+router.post('/login', async (req: Request, res: Response) => {
+  const { email, password } = req.body || {};
+  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+
+  try {
+    const q = `SELECT id, email, role_id, first_name, last_name, password FROM public.tpf_users WHERE email = $1 LIMIT 1`;
+    const { rows } = await pool.query(q, [email]);
+    if (!rows.length) return res.status(401).json({ error: 'invalid credentials' });
+
+    const user = rows[0];
+    console.log('Comparing password for user:', user.password, password);
+    const storedHash = user.password;
+    const passwordMatches = await bcrypt.compare(password, storedHash);
+    if (!passwordMatches) {
+      return res.status(401).json({ error: 'invalid credentials' });
+    }
+    const payload = {
+      role: 'web_user',   // or 'web_admin' for admins — ensure mapping in DB roles
+      user_id: user.id,
+      email: user.email
+    };
+    let access = [];
+    let accessIds: number[] = [];
+    console.log('Fetching role authorizations for role_id:', user.role_id);
+    if (user.role_id) {
+      const auth = `SELECT id, role_id, authorization_id FROM public.tpf_role_authorizations WHERE role_id = $1`;
+      const { rows } = await pool.query(auth, [user.role_id]);
+
+      if (rows.length) {
+        access = rows.map((row: any) => row.authorization_id);
+        accessIds = access;
+
+        const authDetailsQ = `SELECT id, name, attribute_name, resource_name, locale_en FROM public.tpf_authorizations WHERE id = ANY($1::int[])`;
+        const { rows: authDetailsRows } = await pool.query(authDetailsQ, [accessIds]);
+        access = authDetailsRows;
+      }
+    }
+
+    const jwtSecret: any = process.env.JWT_SECRET || 'default_secret';
+    console.log('Signing JWT with secret:', jwtSecret);
+    const token = jwt.sign(payload, jwtSecret, {
+      algorithm: 'HS256',     // 👈 REQUIRED
+      expiresIn: normalizeExpiresIn()  // example: "1h"
+    });
+
+    return res.status(200).json({ token: token, access: access, user: { id: user.id, first_name: user.first_name, last_name: user.last_name, email: user.email, role_id: user.role_id } });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'server error' });
+  }
 });
 
 router.get('/schemes', async (req: Request, res: Response) => {
@@ -191,6 +267,56 @@ router.get('/document-categories', async (req: Request, res: Response) => {
     }   
 });
 
+router.post('/send-mail-nav-update', async (req: Request, res: Response) => {
+  try {
+    const token = req.headers['authorization']?.split(' ')[1];
+    if (!token || !verifyToken(token)) {
+        return res.status(401).json({ error: 'Unauthorized: invalid or missing token' });
+    }
+    const payload = req?.body;
+    const schemesIds = payload?.id;
+    // fetch tpf_schemes for the given ids
+      const schemes = `SELECT * from tpf_schemes WHERE id = $1`;
+      const { rows: schemesRows } = await pool.query(schemes, [schemesIds]);
+
+      if (schemesRows.length) {
+        // fetch the users who has the access to 'update_schemes_status'
+        const authQ = `SELECT u.id, u.email FROM public.tpf_users u
+          JOIN public.tpf_role_authorizations ra ON u.role_id = ra.role_id
+          JOIN public.tpf_authorizations a ON ra.authorization_id = a.id
+          WHERE a.name = $1`; 
+        const { rows: usersRows } = await pool.query(authQ, ['update_schemes_status']);
+        const emails = usersRows.map((user: any) => user.email);
+        // send mail using mailer service
+        const mailerService = new MailerService();
+        const schemeTable = schemesRows.map((scheme: any) => {
+          return `<tr>
+            <td>${scheme.id}</td>
+            <td>${scheme.scheme_name}</td>
+            <td>${scheme.modified_nav}</td>
+            <td>${scheme.modified_nav_date}</td>
+          </tr>`;
+        }).join('');
+        // console.log('Generated schemeTable HTML:', schemeTable);
+        // use template from mailer/templates/nav.html and replace {{DataTable}} with schemeTable and Date
+        await mailerService.sendMail({
+          to: emails,
+          subject: 'NAV Update',
+          template: 'nav',
+          context: { DataTable: schemeTable, DATE: new Date().toLocaleDateString() },
+        });
+        // if mail sent successfully
+        return res.status(200).json({ success: true, message: 'Email sent to users', emails: emails });
+      } else {
+        return res.status(404).json({ error: 'No schemes found for the given IDs' });
+      }
+
+  } catch (err) {
+      return res.status(500).json({ error: String(err) });
+      // return { error: String(err) };
+  }   
+});
+
 //  POST contact-us -> creates a contact us entry
 router.post('/contact-us', async (req: Request, res: Response) => {
     const payloadRaw = getAuthHeaderForReq(req?.body);
@@ -223,6 +349,8 @@ router.post('/contact-us', async (req: Request, res: Response) => {
             headers['Authorization'] = `Bearer ${getServiceToken()}`;
         }
         payload.create_date = new Date().toISOString();
+        const printPayload = { ...payload };
+        console.log('Creating contact us entry with payload:', printPayload); 
 
         const response = await fetch(`${API_DOMAIN}/tpf_contact_us`, {
             method: 'POST',
@@ -244,12 +372,32 @@ router.post('/contact-us', async (req: Request, res: Response) => {
         }
 
         console.log('Contact us entry created:', result);
+        const authQ = `SELECT u.id, u.email FROM public.tpf_users u
+          JOIN public.tpf_role_authorizations ra ON u.role_id = ra.role_id
+          JOIN public.tpf_authorizations a ON ra.authorization_id = a.id
+          WHERE a.name = $1`; 
+        const { rows: usersRows } = await pool.query(authQ, ['receive_mail_on_contact_us']);
+        const emails = usersRows.map((user: any) => user.email);
+        console.log('Contact us notification will be sent to emails:', emails, payload);
+        if (emails.length > 0) {
+            // send mail using mailer service
+            const mailerService = new MailerService();
+            await mailerService.sendMail({
+                to: emails,
+                subject: 'New Contact Us Submission',
+                template: 'contact_us',
+                context: { NAME: printPayload.full_name, EMAIL: printPayload.email, PHONE: printPayload.phone, MESSAGE: printPayload.note },
+            });
+            console.log('Contact us notification email sent to:', emails);
+        }
         return sendEncrypted(res, result);
     } catch (err) {
         console.error('Error in /contact-us:', err);
         return sendEncrypted(res, { error: String(err) });
     }
 });
+
+
 
 // GET /routes -> returns a list of registered routes and a count
 router.get('/routes', (req: Request, res: Response) => {

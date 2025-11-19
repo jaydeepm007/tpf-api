@@ -35,7 +35,7 @@ export class CreateContactUs20251121000000 implements MigrationInterface {
             isNullable: false,
           },
           {
-            name: 'created_at',
+            name: 'created_date',
             type: 'timestamp with time zone',
             default: 'now()',
             isNullable: false,

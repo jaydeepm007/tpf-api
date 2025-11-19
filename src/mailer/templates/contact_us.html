@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>NAV Upload Status - NPS</title>
+	<style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+        }
+        .container {
+            border: 1px solid #e5e5e5;
+            padding: 20px;
+            max-width: 650px;
+            margin: auto;
+            background: #fafafa;
+            border-radius: 6px;
+        }
+        .header {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #444;
+        }
+        .label {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .footer {
+            margin-top: 30px;
+            font-size: 14px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+	<div class="container">
+        <div class="header">New Contact Us Request</div>
+
+        <p><span class="label">Name:</span> {{NAME}}</p>
+        <p><span class="label">Email:</span> {{EMAIL}}</p>
+        <p><span class="label">Phone:</span> {{PHONE}}</p>
+        <p><span class="label">Message:</span></p>
+        <p>{{MESSAGE}}</p>
+
+        <div class="footer">
+            Regards,<br />
+            <strong>TATA PFM</strong>
+        </div>
+    </div>
+</body>
+</html>

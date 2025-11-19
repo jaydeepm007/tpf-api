@@ -1,0 +1,33 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>NAV Upload Status - NPS</title>
+	<style>
+		/* Add minimal styling as needed */
+		body { font-family: Arial, sans-serif; color: #333; }
+		.table-container { margin-top: 10px; }
+	</style>
+</head>
+<body>
+	<h2>Hi,
+
+NAV has been updated as on {{DATE}} .</h2>
+
+	<div class="table-container">
+		<table border="1" cellpadding="5" cellspacing="0">
+            <tr>
+                <th>Scheme ID</th>
+                <th>Scheme Name</th>
+                <th>NAV</th>
+                <th>NAV Date</th>
+            </tr>
+            {{DataTable}}
+        </table>
+	</div>
+    <div class="footer">
+        Regards,<br />
+        <strong>TATA PFM</strong>
+    </div>
+</body>
+</html>

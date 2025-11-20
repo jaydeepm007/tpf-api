@@ -289,12 +289,17 @@ router.post('/send-mail-nav-update', async (req: Request, res: Response) => {
         const emails = usersRows.map((user: any) => user.email);
         // send mail using mailer service
         const mailerService = new MailerService();
+        // format scheme.modified_nav_date for email dd/mm/yyyy
+        const formattedDate = (dateStr: string) => {
+          const date = new Date(dateStr);
+          return date.toLocaleDateString('en-GB');
+        }
         const schemeTable = schemesRows.map((scheme: any) => {
           return `<tr>
             <td>${scheme.id}</td>
             <td>${scheme.scheme_name}</td>
             <td>${scheme.modified_nav}</td>
-            <td>${scheme.modified_nav_date}</td>
+            <td>${formattedDate(scheme.modified_nav_date)}</td>
           </tr>`;
         }).join('');
         // console.log('Generated schemeTable HTML:', schemeTable);
@@ -303,7 +308,7 @@ router.post('/send-mail-nav-update', async (req: Request, res: Response) => {
           to: emails,
           subject: 'NAV Update',
           template: 'nav',
-          context: { DataTable: schemeTable, DATE: new Date().toLocaleDateString() },
+          context: { DataTable: schemeTable, DATE: formattedDate(schemesRows[0].modified_nav_date) },
         });
         // if mail sent successfully
         return res.status(200).json({ success: true, message: 'Email sent to users', emails: emails });

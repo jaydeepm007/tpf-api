@@ -33,7 +33,7 @@ export class CreateTpfSchemes20251124000000 implements MigrationInterface {
             name: 'asset_category',
             type: 'varchar',
             length: '255',
-            isNullable: false
+            isNullable: true
           },
           {
             name: 'contribution_type',

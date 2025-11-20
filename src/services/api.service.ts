@@ -75,13 +75,32 @@ export class ApiService {
   }
 
   async login(body: any) {
-    const { email, password } = body || {};
+    console.log('ApiService.login received body:', body);
+    console.log('Body type:', typeof body);
+    console.log('Body keys:', body ? Object.keys(body) : 'no keys - body is falsy');
+    
+    // Handle case where body comes as a string that needs to be parsed
+    let parsedBody = body;
+    if (typeof body === 'string') {
+      try {
+        parsedBody = JSON.parse(body);
+        console.log('Successfully parsed string body:', parsedBody);
+      } catch (err) {
+        console.log('Failed to parse string body as JSON:', err);
+        return { status: 400, body: { error: 'Invalid JSON in request body' } };
+      }
+    }
+    
+    const { email, password } = parsedBody || {};
+    console.log('Login attempt with email:', email, 'and password:', password ? '***' : 'not provided');
     if (!email || !password) return { status: 400, body: { error: 'email and password required' } };
     try {
       const q = `SELECT id, email, role_id, first_name, last_name, password FROM public.tpf_users WHERE email = $1 LIMIT 1`;
       const { rows } = await pool.query(q, [email]);
+      console.log('Login query result rows:', rows);
       if (!rows.length) return { status: 401, body: { error: 'invalid credentials' } };
       const user = rows[0];
+      console.log('User found:', user)
       const passwordMatches = await bcrypt.compare(password, user.password);
       if (!passwordMatches) return { status: 401, body: { error: 'invalid credentials' } };
 
@@ -136,7 +155,17 @@ export class ApiService {
     if (!token || !this.verifyToken(token)) {
       return { status: 401, body: { error: 'Unauthorized: invalid or missing token' } };
     }
-    const payload = body;
+    let parsedBody = body;
+    if (typeof body === 'string') {
+      try {
+        parsedBody = JSON.parse(body);
+        console.log('Successfully parsed string body:', parsedBody);
+      } catch (err) {
+        console.log('Failed to parse string body as JSON:', err);
+        return { status: 400, body: { error: 'Invalid JSON in request body' } };
+      }
+    }
+    const payload = typeof body === 'string' ? parsedBody : body;
     const schemesIds = payload?.id;
     const schemesQ = `SELECT * from tpf_schemes WHERE id = $1`;
     const { rows: schemesRows } = await pool.query(schemesQ, [schemesIds]);

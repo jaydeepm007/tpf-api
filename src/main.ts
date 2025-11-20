@@ -1,58 +1,36 @@
-import express from 'express';
-import bodyParser from 'body-parser';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import apiRouter from './routes/api';
-
+import { NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+import * as bodyParser from 'body-parser';  
+import * as dotenv from 'dotenv';
 dotenv.config();
 
-const app = express();
-const PORT = Number(process.env.PORT || 3200);
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  
+  // Swagger configuration
+  const config = new DocumentBuilder()
+    .setTitle('TPF Backend API')
+    .setDescription('The TPF Backend API documentation')
+    .setVersion('1.0')
+    .addTag('tpf')
+    .addBearerAuth()
+    .build();
+  
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
 
-// middleware
-app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// mount API router on both /api and / for compatibility
-app.use('/api', apiRouter);
-app.use('/', apiRouter);
-
-// simple health check
-app.get('/health', (_req, res) => {
-  res.json({ ok: true, env: process.env.NODE_ENV || 'development' });
-});
-
-// list registered routes for debugging
-function listRoutes() {
-  const out: { method: string; path: string }[] = [];
-  const stack = (app as any)._router?.stack || [];
-  for (const layer of stack) {
-    if (layer.route && layer.route.path) {
-      const methods = layer.route.methods || {};
-      const method = Object.keys(methods).find((m) => methods[m])?.toUpperCase() || 'GET';
-      out.push({ method, path: layer.route.path });
-    } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
-      for (const nested of layer.handle.stack) {
-        if (nested.route && nested.route.path) {
-          const methods = nested.route.methods || {};
-          const method = Object.keys(methods).find((m) => methods[m])?.toUpperCase() || 'GET';
-          // include parent prefix if available
-          const prefix = layer.regexp && layer.regexp.fast_slash ? '' : (layer.regexp && layer.regexp.source) || '';
-          out.push({ method, path: nested.route.path });
-        }
-      }
-    }
-  }
-  return out;
+  // Accept raw text body
+  app.use(bodyParser.text({ type: '*/*' }));
+  app.enableCors();
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true }));
+  const port = process.env.PORT || 3000;
+  await app.listen(port);
+  // minimal console feedback
+  // eslint-disable-next-line no-console
+  console.log(`Nest application listening on port ${port}`);
+  console.log(`Swagger documentation available at http://localhost:${port}/api`);
 }
 
-app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
-  console.log('Registered routes:', listRoutes());
-});
-
-// basic 404
-app.use((_req, res) => {
-  res.status(404).json({ error: 'Not Found' });
-});
+bootstrap();
